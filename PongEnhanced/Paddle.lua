@@ -38,13 +38,23 @@ function Paddle:update4(dt)
     elseif self.dy > 0 then 
         self.y = math.min(virtualHeight - 15, self.y + self.dy * dt)
     end
-end
-    
-        
-        
+end    
 
-function Paddle:render()
+function Paddle:update5(dt)
+    if self.dy < 0 then 
+        self.y = math.max(0, self.y + self.dy * dt)
+    elseif self.dy > 0 then
+        self.y = math.min(virtualHeight - 60 - paddleMultiplier, self.y + self.dy * dt)
+    end
+end
+
+
+function Paddle:renderPlayer1()
     love.graphics.rectangle('fill', self.x, self.y, self.width, self.height)
+end
+
+function Paddle:renderPlayer2()
+    love.graphics.rectangle('fill', self.x, self.y, self.width, self.height + paddleMultiplier)
 end
 
 

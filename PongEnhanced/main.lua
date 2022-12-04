@@ -2,13 +2,16 @@ Class = require 'class'
 push = require 'push'
 require 'Paddle'
 require 'Ball'
+require 'addfunctions'
 
 --establishes window height/width
 windowWidth = 1280
 windowHeight = 720
 virtualWidth = 854
 virtualHeight = 480
-paddleSpeed = 250
+paddleSpeedPlayer2 = 150
+paddleSpeedPlayer1 = 250
+paddleMultiplier = 0
 
 function love.load()
     love.graphics.setDefaultFilter('nearest', 'nearest')
@@ -21,12 +24,19 @@ function love.load()
     mediumFont = love.graphics.newFont('font.ttf', 24)
     smallFont = love.graphics.newFont('font.ttf', 18)
     math.randomseed(os.time())
-    --establihes initial store
+    --establihes initial store and the initial server
     player1score = 0
     player2score = 0
+    servingPlayer = math.random(2) == 1 and 1 or 2
+    winningPlayer = 0
+    winningScore = 5
     establishPaddles()
-    --displays FPS
-    displayFPS()
+    --imports sounds
+    sounds = {
+        ['paddle_hit'] = love.audio.newSource('paddle_hit.wav', 'static'),
+        ['point_scored'] = love.audio.newSource('score.wav', 'static'),
+        ['wall_hit'] = love.audio.newSource('hit.wav', 'static')
+    }
     --establishes the window
     push:setupScreen(virtualWidth, virtualHeight, windowWidth, windowHeight, {
         fullscreen = false,
@@ -43,50 +53,33 @@ function love.keypressed(key)
     elseif key == 'enter' or key == 'return' then
         if gameState == 'main_menu' then
             gameState = 'start'
+        elseif gameState == 'play' then
+            gameState = 'start'
         end
-    elseif key == 'space' then
+    elseif key == 'space' and gameState == 'start' then
         gameState = 'play'
+        ball:reset()
+    elseif key == 'space' and gameState == 'serve' then
+        gameState = 'play'
+    elseif key == 'space' and gameState == 'victory' then
+        gameState = 'start'
     end
 end
 
 function love.update(dt)
     if gameState == 'play' then
-        --if the ball collides with any of the paddles for player 1
-        if ball:collides(player1paddle1) then
-            ball.dx = -ball.dx
-        end
-        if ball:collides(player1paddle2) then
-            ball.dx = -ball.dx
-        end
-        if ball:collides(player1paddle3) then
-            ball.dx = -ball.dx
-        end
-        if ball:collides(player1paddle4) then
-            ball.dx = -ball.dx
-        end
-        -- if the ball collides with any of the paddles for player 2
-        if ball:collides(player2paddle1) then
-            ball.dx = -ball.dx
-        end
-        if ball:collides(player2paddle2) then
-            ball.dx = -ball.dx
-        end
-        if ball:collides(player2paddle3) then
-            ball.dx = -ball.dx
-        end
-        if ball:collides(player2paddle4) then
-            ball.dx = -ball.dx
-        end
+        --if player 1 or 2scores
+        player2scores()
+        player1scores()
+        --if the ball collides with any of the paddles for player 1 or 2
+        collision()
         --[[moves the ball, the update function is different for each paddle as the min/max y boundaries
         are different for each part of the paddle]]
         player1paddle1:update1(dt)
         player1paddle2:update2(dt)
         player1paddle3:update3(dt)
         player1paddle4:update4(dt)
-        player2paddle1:update1(dt)
-        player2paddle2:update2(dt)
-        player2paddle3:update3(dt)
-        player2paddle4:update4(dt)
+        player2paddle1:update5(dt)
         player1Movement(dt)
         player2Movement(dt)
         --deflects ball if it hits upper/lower border
@@ -108,6 +101,12 @@ function love.draw()
         start()
     elseif gameState == 'play' then
         play()
+    elseif gameState == 'serve' then
+        serve()
+    elseif gameState == 'victory' then
+        victory()
+        player1score = 0
+        player2score = 0
     end
     --draws the score
     if gameState ~='main_menu' then
@@ -116,13 +115,6 @@ function love.draw()
         love.graphics.print(player2score, virtualWidth / 2 + 70, virtualHeight / 3)
     end
     push:apply('end')
-end
-
-function displayFPS()
-    love.graphics.setColor(0, 1, 0, 1)
-    love.graphics.setFont(smallFont)
-    love.graphics.print('FPS: ' .. tostring(love.timer.getFPS()), 40, 20)
-    love.graphics.setColor(1, 1, 1, 1)
 end
 
 function mainMenu()
@@ -148,43 +140,55 @@ function start()
 end
 
 function play()
-    player1paddle1:render()
-    player1paddle2:render()
-    player1paddle3:render()
-    player1paddle4:render()
-    player2paddle1:render()
-    player2paddle2:render()
-    player2paddle3:render()
-    player2paddle4:render()
+    player1paddle1:renderPlayer1()
+    player1paddle2:renderPlayer1()
+    player1paddle3:renderPlayer1()
+    player1paddle4:renderPlayer1()
+    player2paddle1:renderPlayer2()
     ball:render()
+end
+
+function serve()
+    player1paddle1:renderPlayer1()
+    player1paddle2:renderPlayer1()
+    player1paddle3:renderPlayer1()
+    player1paddle4:renderPlayer1()
+    player2paddle1:renderPlayer2()
+    ball:render()
+    love.graphics.setFont(mediumFont)
+    love.graphics.printf('Press Space to Play Next Round', 0, 25, virtualWidth, 'center')
 end
 
 function establishPaddles()
     --displays paddles, player 1
-    player1paddle1 = Paddle(5, 20, 7, 15)
-    player1paddle2 = Paddle(5, 35, 7, 15)
-    player1paddle3 = Paddle(5, 50, 7, 15)
+    paddleHeight = 18
+    player1paddle1 = Paddle(5, 20, 7, paddleHeight)
+    player1paddle2 = Paddle(5, 35, 7, paddleHeight)
+    player1paddle3 = Paddle(5, 50, 7, paddleHeight)
     player1paddle4 = Paddle(5, 65, 7, 15)
     --player 2 paddles
-    player2paddle1 = Paddle(virtualWidth - 12, 20, 7, 15)
-    player2paddle2 = Paddle(virtualWidth - 12, 35, 7, 15)
-    player2paddle3 = Paddle(virtualWidth - 12, 50, 7, 15)
-    player2paddle4 = Paddle(virtualWidth - 12, 65, 7, 15)
+    player2paddle1 = Paddle(virtualWidth - 12, 20, 7, 60)
     --the ball
     ball = Ball(virtualWidth / 2 - 4, virtualHeight / 2 - 4, 8, 8)
+    --establishes initial server
+    if servingPlayer == 1 then
+        ball.dx = 200
+    else
+        ball.dx = -200
+    end
 end
 
 function player1Movement()
     if love.keyboard.isDown('w') then
-        player1paddle1.dy = -paddleSpeed
-        player1paddle2.dy = -paddleSpeed
-        player1paddle3.dy = -paddleSpeed
-        player1paddle4.dy = -paddleSpeed
+        player1paddle1.dy = -paddleSpeedPlayer1
+        player1paddle2.dy = -paddleSpeedPlayer1
+        player1paddle3.dy = -paddleSpeedPlayer1
+        player1paddle4.dy = -paddleSpeedPlayer1
     elseif love.keyboard.isDown('s') then
-        player1paddle1.dy = paddleSpeed
-        player1paddle2.dy = paddleSpeed
-        player1paddle3.dy = paddleSpeed
-        player1paddle4.dy = paddleSpeed
+        player1paddle1.dy = paddleSpeedPlayer1
+        player1paddle2.dy = paddleSpeedPlayer1
+        player1paddle3.dy = paddleSpeedPlayer1
+        player1paddle4.dy = paddleSpeedPlayer1
     else
         player1paddle1.dy = 0
         player1paddle2.dy = 0
@@ -194,32 +198,101 @@ function player1Movement()
 end
 
 function player2Movement()
-    if love.keyboard.isDown('up') then
-        player2paddle1.dy = -paddleSpeed
-        player2paddle2.dy = -paddleSpeed
-        player2paddle3.dy = -paddleSpeed
-        player2paddle4.dy = -paddleSpeed
-    elseif love.keyboard.isDown('down') then
-        player2paddle1.dy = paddleSpeed
-        player2paddle2.dy = paddleSpeed
-        player2paddle3.dy = paddleSpeed
-        player2paddle4.dy = paddleSpeed
+    if gameState == 'play' then
+        if player2paddle1.y > ball.y then
+            player2paddle1.dy = -paddleSpeedPlayer2
+        elseif player2paddle1.y < ball.y then
+            player2paddle1.dy = paddleSpeedPlayer2
+        end
     else
         player2paddle1.dy = 0
-        player2paddle2.dy = 0
-        player2paddle3.dy = 0
-        player2paddle4.dy = 0
     end
 end
 
 function ballYDeflection()
     if ball.y <= 0 then
         ball.dy = -ball.dy
-        ball.y = 0
+        sounds['wall_hit']:play()
+        --ball.y = 0
     end
     if ball.y >= virtualHeight - 8 then
         ball.dy = -ball.dy
-        ball.y = virtualHeight - 8
+        sounds['wall_hit']:play()
+        --ball.y = virtualHeight - 8
     end
 end
 
+function collision()
+    --collides with player 1 paddles (with the holes between paddles)
+    if ball:collides(player1paddle1) then
+        ball.dx = -ball.dx
+        sounds['paddle_hit']:play()
+    end
+    if ball:collides(player1paddle2) then
+        ball.dx = -ball.dx
+        sounds['paddle_hit']:play()
+    end
+    if ball:collides(player1paddle3) then
+        ball.dx = -ball.dx
+        sounds['paddle_hit']:play()
+    end
+    if ball:collides(player1paddle4) then
+        ball.dx = -ball.dx
+        sounds['paddle_hit']:play()
+    end
+    -- if the ball collides with any of the paddle for player 2
+    if ball:collides(player2paddle1) then
+        ball.dx = -ball.dx
+        sounds['paddle_hit']:play()
+    end
+end
+
+function player2scores()
+    if ball.x <= 0 then
+        player2score = player2score + 1
+        servingPlayer = 1
+        paddleMultiplier = paddleMultiplier + 12
+        sounds['point_scored']:play()
+        ball:reset()
+        --establishes a victory condition
+        if player2score >= winningScore then
+            gameState = 'victory'
+            winningPlayer = 2
+        else
+            gameState = 'serve'
+            serve()
+            ball.dx = 300 --serves ball towards player 2
+        end
+    end
+end
+
+function player1scores()
+    if ball.x >= virtualWidth - 8 then
+        player1score = player1score + 1
+        servingPlayer = 2
+        sounds['point_scored']:play()
+        ball:reset()
+        --establishes victory condition
+        if player1score >= winningScore then
+            gameState = 'victory'
+            winningPlayer = 1
+        else
+            gameState = 'serve'
+            serve()
+            ball.dx = -300 --serves ball towards player 1
+        end
+    end
+end
+
+function victory()
+    if winningPlayer == 1 then
+        love.graphics.setFont(mediumFont)
+        love.graphics.printf('Player 1 Wins!', 0, 25, virtualWidth, 'center')
+        love.graphics.printf('Press Space to Play Again or Escape to Exit', 0, 100, virtualWidth, 'center')
+    elseif winningPlayer == 2 then
+        love.graphics.setFont(mediumFont)
+        love.graphics.printf('Player 2 Wins!', 0, 25, virtualWidth, 'center')
+        love.graphics.printf('Press Space to Play Again or Escape to Exit', 0, 100, virtualWidth, 'center')
+    end
+    paddleMultiplier = 0
+end
